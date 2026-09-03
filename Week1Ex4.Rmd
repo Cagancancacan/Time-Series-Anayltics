@@ -1,0 +1,108 @@
+---
+title: "Time Series Analytics Week 1 Ex 4"
+author: "Can"
+date: "2026-09-03"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(ggplot2)
+```
+
+## R Markdown for Time Series Analytics
+Monte Carlo simulation experiment.
+
+A)
+
+First, we need to define our parameters. Alongside the constants we specify a seed so that the rng is consistent over different runs.
+
+Actually why do we call it phi1 instead of phi?
+
+```{r params}
+set.seed(999)
+phi1 <- 0.5
+sd <- 1
+M <- 1000
+```
+
+B)
+
+Now we want to run the simulations on different sample sizes. 
+The internet is telling me that a "burn-in period" is when the first x iterations of a Monte Carlo are tossed as they show an "initial transient phase" that doesn't fit the equilibrium distribution. So, it is used to ignore the weird draws that are "biased". 
+They are also saying they are not so necessary as it is mathematical nonsense (not my words)  (http://users.stat.umn.edu/~geyer/mcmc/burn.html).
+
+I will use a burn-in period of 150 arbitrarily (not sure how to choose other than visually). This will be added to the sample size as it is the warm-up period each run needs.
+We need to make a matrix to hold the outcomes (coefficients) of each sample size simulation, in this case 4 columns and m rows.
+We also need to describe the AR(1) model and make the white noise for each sample size we are working on.
+After than we just run the simulation and store the AR(1) coefficient, which we need a OLS estimate for:
+$$\hat{\phi}_1 = \frac{\sum_{t=2}^{n} y_{t-1} y_t}{\sum_{t=2}^{n} y_{t-1}^2}$$
+
+```{r simul}
+burnin <- 150
+samples <- c(50, 100, 500, 1000)
+coeffs <- matrix(NA, M, length(samples))
+
+for (i in 1:length(samples)) {
+  # each for loop iteration is one sample size 
+  # apparently we have to add the burn-in period to the sample
+  leng <- burnin + samples[i]
+  
+  # now the simulation runs
+  for (m in 1:M) {
+    
+    # AR(1) and white noise
+    y <- vector(length = leng)
+    wn <- rnorm(leng, 0, sd)
+    
+    # our simulation, start at two since we dont have y_(t=0)
+    for (t in 2:leng) {
+       y[t] <-  phi1 * y[t-1] + wn[t]
+    }
+  
+    # then remove the burn-in period from the front
+    yfinal <- y[(burnin+1):leng]
+    
+    # find the coefficients
+    ycur <- yfinal[-1]           
+    ylag <- yfinal[-length(yfinal)]  
+
+    ols <- sum(ylag * ycur) / sum(ylag^2)
+    
+    # store coefficients in matrix
+    coeffs[m,i] <- ols
+  }
+}
+```
+
+C) 
+
+Now we want to compute the squared estimation error for each m. After that we calculate the Mean Squared Estimation Errors for each sample size.
+
+```{r errors}
+square_err <- (coeffs-phi1)^2
+sums <- vector(length=4)
+mse <- vector(length=4)
+
+# get the sums of the squared errors
+sums <- colSums(square_err, na.rm = TRUE)
+
+# divide the squared errors by the 
+for (i in 1:length(sums)) {
+  mse[i] <- sums[i] / M
+}
+
+# to show it visually:
+#plot(samples,mse)
+
+df <- data.frame(
+  x = samples,
+  y = mse
+)
+ggplot(df, aes(x = samples, y = mse)) +
+  geom_point() +
+  geom_curve(aes(x=samples[1], y=mse[1], xend=samples[4], yend=mse[4], colour="curve", curvature=0.1))
+
+```
+We expect that the MSE will get smaller as the sample size increases. This is because 
+We can see that as the number of samples increases we see an exponential decrease in the Mean Squared Estimation Error. This is also likely because the bias was slowly eliminated as we increased the sample size.
