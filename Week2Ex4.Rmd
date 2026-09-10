@@ -1,0 +1,154 @@
+---
+title: "Week 2 Exercises"
+author: "Can"
+date: "2026-09-10"
+output: html_document
+---
+# header 1
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Exercise 4:
+
+```{r Ex 4 A}
+# Load required package
+library(bootUR)
+library(ggplot2)
+library(dplyr)
+library(vars)
+
+# Load dataset
+data(MacroTS)
+
+# get the GDP and CONS data from the MacroTS set
+
+
+# take only the relevant time frame
+gdp_uk <- window(MacroTS[, "GDP_UK"], start = c(1995, 1), end = c(2019, 4))
+cons_uk <- window(MacroTS[, "CONS_UK"], start = c(1995, 1), end = c(2019, 4))
+
+#sapply(MacroTS, class) 
+
+# plot them 
+#ggplot(MacroTS, aes(x = 1:nrow(MacroTS), y = `GDP_UK`)) +
+#  geom_line() +
+#  geom_point()
+#ggplot(MacroTS, aes(x = 1:nrow(MacroTS), y = `CONS_UK`)) +
+#  geom_line() +
+#  geom_point()
+
+plot(gdp_uk)
+plot(cons_uk)
+
+```
+We can see that both graphs have a clear upward trend with one negative shock around halfway down the time frame. It's clearly not stationary, as the mean changes over time.
+The shock is also clearly during the 2008 crisis.
+
+Now we want to take the log-differences. For this I'll first take the log of both sets and then take the differences
+
+```{r Ex 4 b}
+# take the logs
+lgdp <- log(gdp_uk)
+lcons <- log(cons_uk)
+
+# take the differences
+dgdp <- diff(lgdp)
+dcons <- diff(lcons)
+
+# now we make a var with these two, I think that means we just put them together and make a vector
+y <- cbind(dgdp,dcons)
+
+# to select order use VARselect which shows what lag orders look like 
+lags <- VARselect(y)
+
+# to keep it "parsimonious" and avoid overfitting i'll use BIC (called SC apparently)
+print(lags$selection)
+print(lags$criteria)
+
+```
+```{r Ex 4 c}
+# use a function from the VARS library to estimate the VAR with order 1
+var <- VAR(y, p = 1, type = "const")
+
+# check the estimated output
+summary(var)
+
+```
+From the summary, we can see that
+
+We now want to check the Granger causality to see if consumption growth causes gdp growth
+
+```{r Ex 4 d}
+# we can use the causality function to chekc this
+causality(var, cause="dcons")
+```
+The result suggests that there is causality between the two as the p-value below the confidence interval, meaning that we reject the null hypothesis that consumption growth doesn't cause gdp growth.
+
+I'll apply the impulse for finding the IRF to the model instead of a specific variable (gdp or cons)
+```{r Ex 4 e}
+# use the irf function
+irf <- irf(var)
+plot(irf)
+```
+Difference between the upper and lower impulse responses????
+The impulse response on gdp in the var shows that 
+
+f) No :)
+I would say that using in-built features (functions) is never ideal, as we are not directly privy to the inner workings of the functions. So it could be improved by doing all the calculations manually. 
+Another point is
+
+
+# header 2
+
+Exercise 5:
+
+My two favourite ARMA models are AR(2) and ARMA(1,1), so I will be using them. I'll use the arima() function to implement them as I feel that Enrico was encouraging that (and I do not have any phi coefficients in mind).
+The time series is 100 units long, so the initial sample size will be s = 40 (10 years of data), and will iteratively increase until h = 24 (the last 5 years).
+
+```{r}
+# already have the uk gdp as a variable
+ssize = 40
+n = length(dgdp) - ssize
+wn <- rnorm(length(dgdp), 0, sd)
+
+# initialise the error vectors of the models
+errModel1 <- numeric(n) 
+errModel2 <- numeric(n)
+
+# so, we want to start with a sample size of 40, go up to 76
+for (i in 1:n) {
+  # set our sample for this iteration, subtract 1 as index i must start at 1
+  ysample <- dgdp[1:(ssize+i-1)]
+  
+  # now we get our ARMA models for this sample
+  fitm1 = arima(ysample, order = c(2,0,0))
+  fitm2 = arima(ysample, order = c(1,0,1))
+  
+  # now we do the ARMA forecasts
+  # first we do the AR(2) one
+  mu1 <-  coef(fitm1)["intercept"]
+  phi11 <- coef(fitm1)["ar1"]
+  phi12<- coef(fitm1)["ar2"]
+  err1 <-  wn[ssize+i]
+  fore1 <-  mu1 + phi11*ysample[ssize+i] + phi12*ysample[ssize]
+  
+  # now the ARMA(1,1)
+  mu2 <- coef(fitm2)["intercept"]
+  phi2   <- coef(fitm2)["ar1"]
+  theta2 <- coef(fitm2)["ma1"]
+  err21 <-  wn[ssize+i]
+  err22 <- wn[ssize]
+  fore2 <-  mu2 + phi2*ysample[ssize+i] + theta2*err22 + err21
+  
+  # finally we add the errors to the forecast error vectors we made
+  errModel1[i] <- ysample[ssize+i] - fore1
+  errModel2[i] <- ysample[ssize+i] - fore2
+}
+
+# now we need the MSFE
+msfe1 <-  mean(errModel1^2)
+msfe2 <- mean(errModel2^2)
+
+```
+
