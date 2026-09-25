@@ -1,0 +1,54 @@
+---
+title: "Week4"
+author: "Can"
+date: "2026-09-24"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Exercise 4
+
+A)
+
+
+```{r ex4}
+
+# initialise
+set.seed(333)
+c <- 1
+phi <- 0.5
+sample <- 100
+n <- 1000
+q <- 1
+
+# values needed for tests
+c0 <- 1
+crit <- qnorm(0.975)
+m <- floor(4*((sample/100)^(2/9)))
+
+# initialise counters
+counter11 <- 0
+counter21 <- 0
+counter31 <- 0
+
+# run for loop to calculate the s^2 values
+for (i in 1:n) {
+  # calculate our function terms
+  e <- rnorm(sample+1, 0, 1)
+  y <- c + e[2:(sample+1)] + phi*e[1:sample]
+  c_hat <- mean(y)
+  
+  # now we want to calculate our s^2 values
+  s21 <- mean((y - c_hat)^2)
+  
+  # lag order 1 so q is 1
+  for (j in 1:m) {
+    
+  }
+  s22 <- 0
+  s23 <- 0
+}
+```
