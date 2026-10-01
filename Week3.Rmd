@@ -1,0 +1,98 @@
+---
+title: "Week 3 Ex"
+author: "Can"
+date: "2026-09-15"
+output: pdf_document
+---
+
+Week 3 Exercises
+
+Exercise 3
+A)
+
+```{r a}
+library(bootUR)
+data(MacroTS)
+
+# we want the gdp of belgium
+be_gdp <- MacroTS[, "GDP_BE"]   
+
+# then we take the log of this
+lgdp <- log(gdp_be)
+
+# visualise 
+par(mfrow=c(2,2))
+
+plot(be_gdp)
+plot(lgdp)
+plot(diff(lgdp))
+plot(diff(diff(lgdp)))
+```
+This time series data does not look stationary. The mean is clearly not constant, meaning the first condition of weak stationarity is not met. It has a cleary upward trend.
+
+B)
+The log-transformed gdp data looks like it is trend stationary. Trend stationary means that there is a linear increase or decrease in the mean of the function (violating the first condition of weak stationarity), but there is a constant variance about this trend line. This variance is provided by the error term, which we assume is i.i.d. This means it can be made stationary by subtracting the "trend" value from the y value at time t.
+
+Difference stationary is when a function is not stationary (has neither a constant mean nor a constant mean), but can be made stationary when taking the differences between consecutive values. Shocks have a permanent effect(?).
+
+C)
+The Pantula principle is used to determine the number of times a series should be differenced in order to make it stationary. It approaches the order of differences from above, usually starting by testing I(2).
+To do this we:
+- select a maximum number of times we want to difference the function, $d_(max)$
+- set $d = d_(max)$
+- perform the unit root test on the differenced series $y_t$ with difference order $d$
+-- if we reject the null hypothesis it means the differenced data is stationary, so we move down, set $d = d-1$, and go back to step 2
+-- if we reject the null hypothesis at $d=0$ we know that the original $y_t$ is trend stationary
+-- if we dont reject the null hypothesis the series is considered $I(d+1)$
+
+D)
+It wouldnt be fair to include only the constant as the trend of this series clearly rises over time. This means that the intercept is not the only component we need to be careful with, but we also need to consider the trend to account for the constant linear~ increase the series has. This means that the unit root test wouldnt even be fair, as the test wouldnt even account for the possible deterministic growth trend; meaning we wouldnt be able to trust the result. 
+
+Can we decide visually??
+
+E)
+
+```{r e}
+# we need to choose a max d value and set d to it
+dmax <- 2
+
+# can look at bootUR to see what order we should get
+#info <- order_integration(lgdp, max_order=2,method="adf",level=0.05, plot_order=TRUE)
+#info$diff_data
+
+# now for the unit root test we will take the difference of lgdp with order d
+# for this we will use the adf() function
+
+# to test whether the log-differenced gdp is I(2) or I(1) we will  first use d_max differenced lgdp, and include the intercept deterministic
+# we include the intercept, as a I(1) y_t should only be effected by the intercept and not the trend as we have de-trended it
+ytd2 <- diff(diff(lgdp))
+adf(ytd2, deterministics = "intercept")
+
+# for the d_max - 1 we will include the intercept, as the trend has not been taken out at the first difference
+ytd1 <- diff(lgdp)
+adf(ytd1, deterministics = "intercept")
+
+# here we reach d = 0, so we are testing if the initial y_t is stationary
+adf(lgdp, deterministics = "trend")
+```
+We see that through the usage of the Pantula principle that the unit root test at $d = 2$ is rejected, as well as $d=1$ being rejected. These rejections mean that the differenced series are stationary, meaning we can reduce the degree of difference by 1 and try again. When we reach $d=0$ we see that the null hhypothesis is not rejected, meaning that our series has an order of integration of $I(1)$. This would means that the series is difference-stationary (agreed upon by my friend Claude). 
+This is because the to reach stationarity we need to take the difference of 
+
+F)
+
+```{r f}
+# now we want to use the boot_adf test
+# repeat the same process as in part E
+set.seed(1000)
+
+boot_adf(ytd2,data_name="log GDP BE")
+
+boot_adf(ytd1,data_name="log GDP BE")
+
+boot_adf(lgdp,data_name="log GDP BE",deterministics = "trend")
+
+```
+The deterministics used were the same as for part E. Interestingly, if we remove the intercept deterministic from the $d=2$ unit root test, we can see that we get the same estimated largest root, suggesting we dont need to include the intercept deterministic in the test.The same for the $d=1$ test. (Could be deduced through visual inspection).
+
+Generally, bootstrapping in the unit root test over the standard ADF test as the re-sampling  allows the 
+Bootstrap generates data more tailored to the given data.

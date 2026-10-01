@@ -1,0 +1,30 @@
+---
+title: "Week5"
+author: "Can"
+date: "2026-10-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Week 5 Exercise
+
+Exercise 3 for week 5
+
+5.
+a)
+
+
+
+b)
+
+```{r}
+# first call library and import dataset
+library(statespacer)
+data(FedYieldCurve)
+
+# take relevant columns
+
+```
