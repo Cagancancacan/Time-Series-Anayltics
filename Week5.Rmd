@@ -15,16 +15,130 @@ Exercise 3 for week 5
 
 5.
 a)
+What does cointegration rank mean intuitively? why n-1 guaranteed?
 
-
+I would say we expect the interest rates of the treasury yields to be cointegrated, as they are directly tied to the treasury yields, which themselves are cointegrated " model of real yields to maturity in which the instantaneous interest rate is common to all yields" Hall, A. D., Anderson, H. M., & Granger, C. W. (1992). 
+(is this necessarily true?). 
+I dont get the exact reason though, how are the R(k,t) in paper related to the interest rate?
 
 b)
 
 ```{r}
 # first call library and import dataset
 library(statespacer)
-data(FedYieldCurve)
+library(dplyr)
+library(bootUR)
+library(vars)
+#library(tsDyn)
+library(urca)
 
-# take relevant columns
+
+data(FedYieldCurve)
+ds <- FedYieldCurve[, c(1:9)]
+
+# takelook at the interest rate graphs
+par(mfrow=c(2,4))
+plot(x=ds$Month,y=ds$M3)
+plot(x=ds$Month,y=ds$M6)
+plot(x=ds$Month,y=ds$Y1)
+plot(x=ds$Month,y=ds$Y2)
+plot(x=ds$Month,y=ds$Y3)
+plot(x=ds$Month,y=ds$Y5)
+plot(x=ds$Month,y=ds$Y7)
+plot(x=ds$Month,y=ds$Y10)
 
 ```
+They are clearly not stationary. Thus we apply unit root tests.
+(Difference between boot_ur and order_integration???)
+```{r}
+matplot(ds, type="l")
+```
+
+
+```{r}
+# we use the boot_ur() function since it can do the adf test on multiple series in tandem
+
+urds <- order_integration(ds[2:9], max_order = 2, method = "boot_ur", B = 2999, deterministics = "intercept", plot_orders = TRUE)
+
+```
+
+C) 
+Since the interest rates for these yields seem to be dependent on each other, it seems like evaluating them together would be better. As in, they are dependent on each other, so they should be considered together, so we will pool all the data together. 
+How does the bootstrap make the cross-sectional independence assumption not take effect?
+
+If you have a joint hypothesis you should run a joint unit root test
+
+To answer this we will try a panel unit root test to see how they influence each other.
+```{r}
+# will use the boot_panel() function from the bootur package
+urpanel <- boot_panel(ds[2:9], B = 2999, deterministics = "trend")
+urpanel$p.value
+```
+The panel unit root test still does not reject the null that the series have a unit, meaning we take it to be I(1). 
+Does this mean that the series, when combined considered together, are still not stationary.
+How are they actually considered together when a panel is taken??
+
+D)
+Want to use Johansen's Vector Error Correction Model (VECM). 
+Will use a function for this (tsDyn no longer available).
+
+I think this is just a transition point.
+
+```{r}
+ic <- VARselect(ds[2:9])
+ic$selection
+#vecmds <- VECM(ds[2:9],, lag = 2, r = (length(ds[2:9])-1), estim = "ML", include = c("trend", "intercept"))
+
+```
+
+E)
+
+
+F)
+We need to first find the cointegration rank (how many cointegration relations there are) between the n time series.
+The sequential procedure to determine cointegration ranks is as follows:
+
+Step 1. test null hypothesis that there is no cointegration (h = 0).
+  - if we dont reject, conclude there is no cointegration
+  - else continue
+Step 2. test null hypothesis that there is one rank of cointegration (h = 1)
+  - if we dont reject, conclude there is one cointegration relation
+  - else continue
+...
+Step n. test null hypothesis that there is n-1 ranks of cointegration (h = n - 1)
+  - if we dont reject, conclude there are n - 1 cointegration relations
+  - else we have a stationary VAR
+  
+
+G)
+I think we're meant to use the urca package as it has some in-built Johansen related features.
+I will use the ca.jo() function to use the Johansen procedure to find the trace of the n series.
+
+```{r}
+cointrace <- ca.jo(ds[2:9], type = "trace", ecdet = "trend", K = 2, spec = "transitory")
+summary(cointrace)
+
+```
+At a 5% confidence interval we see that the sequence rejects the null hypothesis at $r<=6$ with the test statistic being $25.05$ and the critical value at significance $\alpha = 5%$ is $25.32$. This means that the test sees $6$ cointegrating relations in this set of time series. 
+
+I think that this is not in line with what Hall et al. (1992) say, as they say there should be $n-1$ cointegration relations. We could get this if we look at the $\alpha = 10%$ significance level, where the test rejects when $r<=7$, meaning tbere are 7 cointegration relations. But this does mean that we would need to be less strict in our belief of the test statistic in order to align ourselves with Hall et al. (1992).
+
+H)
+Now we will estimate our VECM using the cajols() function (but this uses OLS, I thought we needed MLE??).
+
+```{r}
+# set our r value and use it to estimate the VECM
+r <- 6
+vecm <- cajorls(cointrace, r = r)
+vecm$rlm
+vecm$beta
+```
+The betas are the long run equilibrium cointegration relation coefficients, and the ECTs (error correcting terms) are values that measure how fast the series will return to the equilibrium value after a shock in the series.
+
+
+
+```{r}
+#var_rep <- vec2var(cointrace, r = r)
+#var_rep
+```
+

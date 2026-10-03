@@ -36,6 +36,7 @@ I will use a burn-in period of 150 arbitrarily (not sure how to choose other tha
 We need to make a matrix to hold the outcomes (coefficients) of each sample size simulation, in this case 4 columns and m rows.
 We also need to describe the AR(1) model and make the white noise for each sample size we are working on.
 After than we just run the simulation and store the AR(1) coefficient, which we need a OLS estimate for:
+
 $$\hat{\phi}_1 = \frac{\sum_{t=2}^{n} y_{t-1} y_t}{\sum_{t=2}^{n} y_{t-1}^2}$$
 
 ```{r simul}
@@ -93,7 +94,10 @@ for (i in 1:length(sums)) {
 }
 
 # to show it visually:
-#plot(samples,mse)
+plot(coeffs[,1])
+plot(coeffs[,2])
+plot(coeffs[,3])
+plot(coeffs[,4])
 
 df <- data.frame(
   x = samples,

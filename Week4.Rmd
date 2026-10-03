@@ -12,7 +12,15 @@ knitr::opts_chunk$set(echo = TRUE)
 Exercise 4
 
 A)
+Size is the chance of falsely rejecting. Ideally with 5% significance. Distance from 5% is symmetric in terms of how bad it is in research. In reality, depends what these outcomes mean to the company and you need to balance it.
 
+I expect the short run variance estimator to perform the worst, as it is lacking the gamma1 term in its estimation.
+
+I think the Newey-West estimator will perform middlingly, It apparently can cause slight over-rejecting due to the downward bias of the kernel estimator (?). Says at $q=4$ the long run variance is 2.05 compared to 2.25 from the true long run variance.
+
+I expect the third to perform the best as it follows the form of the estimator we've seen from the slides for an MA(1) process, where we only take into account gamma0 and gamma1. 
+
+B)
 
 ```{r ex4}
 
@@ -37,18 +45,118 @@ counter31 <- 0
 # run for loop to calculate the s^2 values
 for (i in 1:n) {
   # calculate our function terms
-  e <- rnorm(sample+1, 0, 1)
-  y <- c + e[2:(sample+1)] + phi*e[1:sample]
+  e <- rnorm((sample+1), mean = 0,sd = 1)
+  u <- e[2:(sample+1)] + phi * e[1:sample]
+  y <- c + u
   c_hat <- mean(y)
+  u_hat <- y - c_hat
   
   # now we want to calculate our s^2 values
-  s21 <- mean((y - c_hat)^2)
+  s21 <- mean(u_hat^2)
   
-  # lag order 1 so q is 1
+  # gamma 0 is the variance (u_t ^2), so gamma_0_hat is the variance of the estimated u_t
+  gamma0_hat <- mean(u_hat^2)
+  nw <- 0
+  
+  # lag order 1 so q is 1 (?)
   for (j in 1:m) {
-    
+    gammaj <- (1/sample) * sum(u_hat[(j+1):sample] * u_hat[1:(sample-j)])
+    weight <- (1 - (j/(m + 1)))
+    nw <- nw + 2 * weight * gammaj
   }
-  s22 <- 0
-  s23 <- 0
+  
+  s22 <- max(gamma0_hat + nw, 1e-8)
+  
+  gamma1_hat <- 1/(sample - 1) * sum((u_hat[(2):sample]) * u_hat[1:(sample-1)])
+  
+  s23 <- max(gamma0_hat + 2 * (1-(1/sample)) * gamma1_hat, 1e-8)
+  
+  # now look at the test statistic for each s^2 and increment the respective counters if they falsely reject
+  t1 <- (sqrt(sample) * (c_hat - c))/(sqrt(s21))
+  t2 <- (sqrt(sample) * (c_hat - c))/(sqrt(s22))
+  t3 <- (sqrt(sample) * (c_hat - c))/(sqrt(s23))
+  
+  if (abs(t1) > crit) {
+    counter11 <- counter11 + 1
+  }
+  if (abs(t2) > crit) {
+    counter21    <- counter21 + 1
+  }
+  if (abs(t3) > crit) {
+    counter31 <- counter31 + 1
+  }
 }
+cat("Rejects: ", counter11, "times. ", (counter11/1000)*100, "%\n")
+cat("Rejects: ", counter21, "times. ", (counter21/1000)*100, "%\n")
+cat("Rejects: ", counter31, "times. ", (counter31/1000)*100, "%\n")
 ```
+C) 
+Now with sample size of 1000
+
+```{r}
+# initialise the necessary terms
+sample <- 1000
+counter11 <- 0
+counter21 <- 0
+counter31 <- 0
+m <- floor(4*((sample/100)^(2/9)))
+
+# run for loop to calculate the s^2 values
+for (i in 1:n) {
+  # calculate our function terms
+  e <- rnorm(sample+1, 0, 1)
+  u <- e[2:(sample+1)] + phi*e[1:sample]
+  y <- c + u
+  c_hat <- mean(y)
+  u_hat <- y - c_hat
+  
+  # now we want to calculate our s^2 values
+  s21 <- mean((u_hat)^2)
+  
+  # gamma 0 is the variance (u_t ^2), so gamma_0_hat is the variance of the estimated u_t
+  gamma0_hat <- mean((y-c_hat)^2)
+  nw <- 0
+  
+  # lag order 1 so q is 1 (?)
+  for (j in 1:m) {
+    weight <- (1 - (j/(m + 1)))
+    gammaj <- (1/sample) * sum((u_hat[(j+1):sample]) * u_hat[1:(sample-j)])
+    nw <- nw + 2 * (weight * gammaj)
+  }
+  
+  s22 <- max(gamma0_hat + (nw), 1e-8)
+  
+  gamma1_hat <- 1/(sample - 1) * sum((u_hat[(2):sample]) * u_hat[1:(sample-1)])
+  s23 <- max(gamma0_hat + 2 * (1-(1/sample)) * gamma1_hat, 1e-8)
+  
+  # now look at the test statistic for each s^2 and increment the respective counters if they falsely reject
+  t1 <- (sqrt(sample) * (c_hat - c))/(sqrt(s21))
+  t2 <- (sqrt(sample) * (c_hat - c))/(sqrt(s22))
+  t3 <- (sqrt(sample) * (c_hat - c))/(sqrt(s23))
+  
+  if (abs(t1) > crit) {
+    counter11 <- counter11 + 1
+  }
+  if (abs(t2) > crit) {
+    counter21    <- counter21 + 1
+  }
+  if (abs(t3) > crit) {
+    counter31 <- counter31 + 1
+  }
+}
+
+cat("Rejects: ", counter11, "times. ", (counter11/1000)*100, "%\n")
+cat("Rejects: ", counter21, "times. ", (counter21/1000)*100, "%\n")
+cat("Rejects: ", counter31, "times. ", (counter31/1000)*100, "%\n")
+```
+Yes. All of the variance estimators seem to shrink in their likelihood of falsely rejecting.
+But, not by the same amounts. The short run variance gets only a little bit more accurate (roughly 0.6%), the Newey-West estimator improves by roughly 1% and the closed form estimator gets the closest to the accurate 5% mark.
+
+D)
+Power of the test is the probability of correctly rejecting the null hypothesis when the alternate is true (rejecting null when null is false). To do that we could look at how often this occurs, as in look at how many times the t-statistic is > 1.96.
+We can also simulate under the alternate hypothesis and see how the rejection rate changes (null hypothesis is that c = c_0 = 1, so do it with c =/= 1).
+
+So here want it at 
+
+Why would changing the c help here (intuitively)??
+As in c =/= c_0

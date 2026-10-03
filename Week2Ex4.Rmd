@@ -88,7 +88,7 @@ The result suggests that there is causality between the two as the p-value below
 I'll apply the impulse for finding the IRF to the model instead of a specific variable (gdp or cons)
 ```{r Ex 4 e}
 # use the irf function
-irf <- irf(var)
+irf <- irf(var,runs=1313,ortho=TRUE)
 plot(irf)
 ```
 Difference between the upper and lower impulse responses????
@@ -106,49 +106,175 @@ Exercise 5:
 My two favourite ARMA models are AR(2) and ARMA(1,1), so I will be using them. I'll use the arima() function to implement them as I feel that Enrico was encouraging that (and I do not have any phi coefficients in mind).
 The time series is 100 units long, so the initial sample size will be s = 40 (10 years of data), and will iteratively increase until h = 24 (the last 5 years).
 
-```{r}
+```{r EX 5 a}
 # already have the uk gdp as a variable
-ssize = 40
-n = length(dgdp) - ssize
-wn <- rnorm(length(dgdp), 0, sd)
+# ssize = 40
+# n = length(dgdp) - ssize
+# wn <- rnorm(length(dgdp), 0, sd)
+# 
+# # initialise the error vectors of the models
+# errModel1 <- numeric(n) 
+# errModel2 <- numeric(n)
+# 
+# # so, we want to start with a sample size of 40, go up to 76
+# for (i in 1:n) {
+#   # set our sample for this iteration, subtract 1 as index i must start at 1
+#   ysample <- dgdp[1:(ssize+i-1)]
+#   
+#   # now we get our ARMA models for this sample
+#   fitm1 = arima(ysample, order = c(2,0,0))
+#   fitm2 = arima(ysample, order = c(1,0,1))
+#   
+#   # now we do the ARMA forecasts
+#   # first we do the AR(2) one
+#   mu1 <-  coef(fitm1)["intercept"]
+#   phi11 <- coef(fitm1)["ar1"]
+#   phi12<- coef(fitm1)["ar2"]
+#   err1 <-  wn[ssize+i]
+#   fore1 <-  mu1 + phi11*ysample[ssize+i] + phi12*ysample[ssize]
+#   
+#   # now the ARMA(1,1)
+#   mu2    <- coef(fitm2)["intercept"]
+#   phi2   <- coef(fitm2)["ar1"]
+#   theta2 <- coef(fitm2)["ma1"]
+#   last_res2 <- tail(residuals(fitm2), 1) # filtered residual eps_t
+#   pred2  <- mu2 + phi2 * (tail(ysample, 1) - mu2) + theta2 * last_res2
+#   
+#   # finally we add the errors to the forecast error vectors we made
+#   errModel1[i] <- ysample[ssize+i] - fore1
+#   errModel2[i] <- ysample[ssize+i] - fore2
+# }
 
-# initialise the error vectors of the models
-errModel1 <- numeric(n) 
-errModel2 <- numeric(n)
+T_total <- length(dgdp)
 
-# so, we want to start with a sample size of 40, go up to 76
-for (i in 1:n) {
-  # set our sample for this iteration, subtract 1 as index i must start at 1
-  ysample <- dgdp[1:(ssize+i-1)]
+# 2. Expanding window parameters
+# Use first 40 quarters (10 years) as initial estimation sample
+T_start <- 40 
+n_forecasts <- T_total - T_start
+
+forecast_errors_m1 <- numeric(n_forecasts)
+forecast_errors_m2 <- numeric(n_forecasts)
+# 3. Expanding window loop
+for (i in 1:n_forecasts) {
+  t_end <- T_start + i - 1
   
-  # now we get our ARMA models for this sample
-  fitm1 = arima(ysample, order = c(2,0,0))
-  fitm2 = arima(ysample, order = c(1,0,1))
+  # Step i: Define estimation sample (1 to t_end)
+  y_train <- y[1:t_end]
+  actual  <- y[t_end + 1]
   
-  # now we do the ARMA forecasts
-  # first we do the AR(2) one
-  mu1 <-  coef(fitm1)["intercept"]
-  phi11 <- coef(fitm1)["ar1"]
-  phi12<- coef(fitm1)["ar2"]
-  err1 <-  wn[ssize+i]
-  fore1 <-  mu1 + phi11*ysample[ssize+i] + phi12*ysample[ssize]
+  # Step ii: Estimate ARMA models
+  fit1 <- arima(y_train, order = c(2, 0, 0), include.mean = TRUE)
+  fit2 <- arima(y_train, order = c(1, 0, 1), include.mean = TRUE)
   
-  # now the ARMA(1,1)
-  mu2 <- coef(fitm2)["intercept"]
-  phi2   <- coef(fitm2)["ar1"]
-  theta2 <- coef(fitm2)["ma1"]
-  err21 <-  wn[ssize+i]
-  err22 <- wn[ssize]
-  fore2 <-  mu2 + phi2*ysample[ssize+i] + theta2*err22 + err21
+  # Step iii: Manual 1-step-ahead forecasts
+  # AR(2): y_{t+1|t} - mu = phi * (y_t - mu) phi1 * (y_t-1 - mu)
+  mu1  <- coef(fit1)["intercept"]
+  phi11 <- coef(fit1)["ar1"]
+  phi12 <- coef(fit1)["ar2"]
+  pred1 <- mu1 + phi11 * (tail(y_train, 1) - mu1) + phi12 * (tail(y_train, 2)- mu1)
   
-  # finally we add the errors to the forecast error vectors we made
-  errModel1[i] <- ysample[ssize+i] - fore1
-  errModel2[i] <- ysample[ssize+i] - fore2
+  # ARMA(1,1): y_{t+1|t} - mu = phi * (y_t - mu) + theta * eps_t
+  mu2    <- coef(fit2)["intercept"]
+  phi2   <- coef(fit2)["ar1"]
+  theta2 <- coef(fit2)["ma1"]
+  last_res2 <- tail(residuals(fit2), 1) # filtered residual eps_t
+  pred2  <- mu2 + phi2 * (tail(y_train, 1) - mu2) + theta2 * last_res2
+  
+  # Step iv: Store forecast errors
+  forecast_errors_m1[i] <- actual - pred1
+  forecast_errors_m2[i] <- actual - pred2
 }
 
-# now we need the MSFE
-msfe1 <-  mean(errModel1^2)
-msfe2 <- mean(errModel2^2)
-
+# 4. Compare Mean Squared Forecast Errors (MSFE)
+msfe1 <- mean(forecast_errors_m1^2)
+msfe2 <- mean(forecast_errors_m2^2)
+msfe1
+msfe2
+plot(forecast_errors_m1^2, type = "l", col = "blue", ylab = "Squared forecast error",
+     main = "Squared forecast errors over time")
+lines(forecast_errors_m2^2, col = "red")
 ```
+We see that the MSFE for AR(2) is 1.154 and ARMA(1,1) is 1.142. From this we can see that the ARMA(1,1) model is a better forecaster out-of-sample for this specific dataset; however, the less complex AR(2) model is not far behind.
+
+```{r Ex 5 b}
+# to adjust we need a window size, I'll take 40 again
+w <- 40
+
+for (i in 1:n_forecasts) {
+  start <- i
+  end <- i + w - 1
+  y_train <- y[start:end]
+  actual <- y[end + 1]
+  
+  # Step ii: Estimate ARMA models
+  fit1 <- arima(y_train, order = c(2, 0, 0), include.mean = TRUE)
+  fit2 <- arima(y_train, order = c(1, 0, 1), include.mean = TRUE)
+  
+  # Step iii: Manual 1-step-ahead forecasts
+  # AR(2): y_{t+1|t} - mu = phi * (y_t - mu) phi1 * (y_t-1 - mu)
+  mu1  <- coef(fit1)["intercept"]
+  phi11 <- coef(fit1)["ar1"]
+  phi12 <- coef(fit1)["ar2"]
+  pred1 <- mu1 + phi11 * (tail(y_train, 1) - mu1) + phi12 * (tail(y_train, 2)- mu1)
+  
+  # ARMA(1,1): y_{t+1|t} - mu = phi * (y_t - mu) + theta * eps_t
+  mu2    <- coef(fit2)["intercept"]
+  phi2   <- coef(fit2)["ar1"]
+  theta2 <- coef(fit2)["ma1"]
+  last_res2 <- tail(residuals(fit2), 1) # filtered residual eps_t
+  pred2  <- mu2 + phi2 * (tail(y_train, 1) - mu2) + theta2 * last_res2
+  
+  # Step iv: Store forecast errors
+  forecast_errors_m1[i] <- actual - pred1
+  forecast_errors_m2[i] <- actual - pred2
+}
+
+msfe1 <- mean(forecast_errors_m1^2)
+msfe2 <- mean(forecast_errors_m2^2)
+msfe1
+msfe2
+plot(forecast_errors_m1^2, type = "l", col = "blue", ylab = "Squared forecast error",
+     main = "Squared forecast errors over time")
+lines(forecast_errors_m2^2, col = "red")
+```
+Here we see that the MSFE for AR(2) becomes 1.168 and ARMA(1,1) becomes 1.145. Both seem to be worse forecasters when compared to the expanding window simulation.
+
+For an h forecast we just need to let a horizon h be defined and then do the same process as before.
+
+```{r Ex 5 c}
+# define h
+h <- 4
+
+# take an adjusted number of forecasts 
+n_forecasts <- T_total - T_start - h + 1
+forecast_errors <- numeric(n_forecasts)
+w <- 40
+
+# in this case the sampling window is still the rolling version
+for (i in 1:n_forecasts) {
+  start <- i
+  end <- i + w - 1
+  y_train <- y[start:end]
+  actual <- y[end + h]
+  
+  # fit the model again
+  fit <- arima(y_train, order = c(1, 0, 0), include.mean = TRUE)
+
+  # in the case of an AR(1) (for simplicity) we get:
+  mu1  <- coef(fit)["intercept"]
+  phi1 <- coef(fit)["ar1"]
+  pred_h <- mu1 + (phi1^h) * (tail(y_train, 1) - mu1)  
+  
+  # store the forecast again
+  forecast_errors[i] <- actual - pred_h
+}
+# then take msfe for this forecast
+msfe <- mean(forecast_errors^2)
+msfe
+plot(forecast_errors^2, type = "l", col = "blue", ylab = "Squared forecast error",
+     main = "Squared forecast errors over time")
+```
+This gives us the general forecast horizon version.
+
+Part d) 
 
