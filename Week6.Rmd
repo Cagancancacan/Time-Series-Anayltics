@@ -1,0 +1,113 @@
+---
+title: "Week 6"
+author: "Can"
+date: "2026-10-07"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Week 6 Exercises
+
+Exercises for week 6 TSA.
+
+4.
+A)
+
+```{r}
+# first sset seed so all simulations are reproducible
+source("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/code/ssm_functions.R")
+set.seed(69)
+
+# then do the initialisations
+n <- 200
+var_eps <- 1
+var_eta <- 0.1
+mu1 <- 0
+
+# now we need to generate our y_t and mu_t series and the epsilon values
+mu <- numeric(n)
+y <- numeric(n)
+eps <- rnorm(n = 200, mean = 0, sd = sqrt(var_eps))
+eta <- rnorm(n = 200, mean = 0, sd = sqrt(var_eta))
+
+# now we need to use the mu1 to start the data simulation
+mu[1] <- mu1
+y[1] <- mu1 + eps[1]
+
+for(i in 2:n) { 
+  mu[i] <- mu[i-1] + eta[i]
+  y[i] <- y[i-1] + eps[i]
+}
+
+plot(mu)
+plot(y)
+
+```
+B)
+Want to use the functions given by Tobias to get filtered and smoothed estimates.
+
+```{r}
+# write model parameters as matrices
+model <- list(
+  T = matrix(1, nrow = 1,1),
+  R = matrix(1, nrow = 1,1),
+  Z = matrix(1, nrow = 1,1),
+  Q = matrix(var_eta, nrow = 1),
+  H = matrix(var_eps, nrow = 1),
+  #c = matrix(0, nrow = 1,1),
+  a1 = matrix(mu1, nrow = 1,1),
+  P1 = matrix(1e7, nrow = 1,1)
+)
+
+y_mat <- matrix(y, ncol = 1)
+
+#mod <- list(
+#  Z  = matrix(1, 1, 1),
+#  H  = matrix(1, 1, 1),      # True var_eps
+#  T  = matrix(1, 1, 1),
+#  R  = matrix(1, 1, 1),
+#  Q  = matrix(0.1, 1, 1),    # True var_eta
+#  a1 = c(0),
+#  P1 = matrix(1e7, 1, 1)     # Big kappa for diffuse initialisation
+#)
+
+# Kalman filter needs a matrix
+ymat <- matrix(y, ncol = 1)
+
+# use the filter function
+kal <- kalman_filter(y = y_mat, mod = model)
+
+# now smoothing function
+smo <- state_smoother(y_mat, mod, kal)
+
+# now we need to take 
+at <- kal$a[1:n]
+att <- kal$att
+ahat <- smo$ahat
+
+par(mfrow=c(1,3))
+plot(at, type = "l")
+plot(att, type = "l")
+plot(ahat, type = "l")
+
+```
+We have the point wise estimates.
+Now we want the 90% confidence bands.
+
+```{r}
+
+```
+
+
+
+5.
+A)
+
+You can also embed plots, for example:
+
+```{r}
+plot(pressure)
+```
