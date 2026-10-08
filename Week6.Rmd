@@ -30,8 +30,8 @@ mu1 <- 0
 # now we need to generate our y_t and mu_t series and the epsilon values
 mu <- numeric(n)
 y <- numeric(n)
-eps <- rnorm(n = 200, mean = 0, sd = sqrt(var_eps))
-eta <- rnorm(n = 200, mean = 0, sd = sqrt(var_eta))
+eps <- rnorm(n = 201, mean = 0, sd = sqrt(var_eps))
+eta <- rnorm(n = 201, mean = 0, sd = sqrt(var_eta))
 
 # now we need to use the mu1 to start the data simulation
 mu[1] <- mu1
@@ -39,7 +39,7 @@ y[1] <- mu1 + eps[1]
 
 for(i in 2:n) { 
   mu[i] <- mu[i-1] + eta[i]
-  y[i] <- y[i-1] + eps[i]
+  y[i] <- mu[i] + eps[i]
 }
 
 plot(mu)
@@ -59,29 +59,17 @@ model <- list(
   H = matrix(var_eps, nrow = 1),
   #c = matrix(0, nrow = 1,1),
   a1 = matrix(mu1, nrow = 1,1),
-  P1 = matrix(1e7, nrow = 1,1)
+  P1 = matrix(1e7, nrow = 1,1) # from lecture slides, to diffuse shock(?)
 )
-
-y_mat <- matrix(y, ncol = 1)
-
-#mod <- list(
-#  Z  = matrix(1, 1, 1),
-#  H  = matrix(1, 1, 1),      # True var_eps
-#  T  = matrix(1, 1, 1),
-#  R  = matrix(1, 1, 1),
-#  Q  = matrix(0.1, 1, 1),    # True var_eta
-#  a1 = c(0),
-#  P1 = matrix(1e7, 1, 1)     # Big kappa for diffuse initialisation
-#)
 
 # Kalman filter needs a matrix
 ymat <- matrix(y, ncol = 1)
 
 # use the filter function
-kal <- kalman_filter(y = y_mat, mod = model)
+kal <- kalman_filter(y = ymat, mod = model)
 
 # now smoothing function
-smo <- state_smoother(y_mat, mod, kal)
+smo <- state_smoother(ymat, mod, kal)
 
 # now we need to take 
 at <- kal$a[1:n]
@@ -95,19 +83,131 @@ plot(ahat, type = "l")
 
 ```
 We have the point wise estimates.
-Now we want the 90% confidence bands.
+Now we want the 90% confidence bands. We wil get them from the Pt|t value for the Kalman filter and the Vt value for the smoothing.
 
 ```{r}
+# get variances first
+var_kal <- kal$Ptt[1, 1, ]
+band_kal <- sqrt(var_kal)
+
+var_smo <- smo$V[1, 1, ]
+band_smo <- sqrt(var_smo)
+
+# now we plot the the estimates with their respective terms
+# first the kalman filter
+plot(y, col="grey", type="l")
+lines(mu, col="deeppink")
+lines(att, col="purple", lwd=2)
+lines(att + 1.645 * band_kal, col="indianred", lty=5, lwd=2)
+lines(att - 1.645 * band_kal, col="indianred", lty=5, lwd=2)
+
+# now the smoothing
+plot(y, col="grey", type="l")
+lines(mu, col="deeppink")
+lines(ahat, col="pink", lwd=2)
+lines(ahat + 1.645 * band_smo, col="maroon", lty="dashed", lwd=2)
+lines(ahat - 1.645 * band_smo, col="maroon", lty="dashed", lwd=2)
 
 ```
+Now we need to compute the RMSE of at att and ahat relative to mut
+```{r}
 
-
+rmse_at <- sqrt(mean((mu-at)^2))
+rmse_att <- sqrt(mean((mu-att)^2))
+rmse_ahat <- sqrt(mean((mu-ahat)^2))
+rmse <- data.frame(
+  Term = c(
+    "at",
+    "att",
+    "ahat"
+  ),
+  
+  RMSE = c(
+    rmse_at,
+    rmse_att,
+    rmse_ahat
+  )
+)
+rmse
+```
+The rmse for ahat is the smallest. The reason for this would be that it is the estimate conditioned on the whole dataset of observed $y_t$ values, meaning it has the best understanding of the "layout" of the data. 
+The a_tt is in the middle as it is the estimated value accounting for the variation from the observed data, meaning it gets "pulled" closer to the real value observed (in order to get a better prediction).
+a_t performs the worst as it is a pure estimate of the data.
 
 5.
-A)
-
-You can also embed plots, for example:
+We first want to load the data, and transform it to suit our conditions
 
 ```{r}
-plot(pressure)
+# load data
+dss <- read.csv("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/data/GDPC1.csv")
+
+# keep data from 1948Q1 onward
+gdp <- data.frame(quarter = as.Date(dss$observation_date, format = "%Y-%m-%d"), gdp = dss$GDPC1)
+
+gdp <- gdp[gdp$quarter >= as.Date("1948-01-01"), ]
+gdp
+y <- 100*log(gdp$gdp)
+
+# now set the covid values
+y[gdp$quarter %in% c("2020-04-01", "2020-07-01")] <- NA
+y
+
 ```
+Now we have the data, we can start.
+
+A)
+Now we want to estimate the model and report the estimates. So we first need to instantiate teh model like in question 4, but have to slightly adjust based on lecture slides page 20/12.
+Looking at Tobias' code, we see we need to make a function to make the model.
+
+```{r}
+# have the model already
+source("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/code/ssm_functions.R")
+source("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/code/ar2_cycle_simulation.R")
+source("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/code/uc_univariate.R")
+source("C:/Users/Can/Desktop/eor/tsa/week 6 data+code/code/run_all.R")
+
+run_all
+
+```
+Get output from run_all.R script, now pass these thetas into our model.
+```{r}
+# take the values manually
+phi1 <- 1.5133  
+phi2 <- -0.5648
+delta0 <- 0.9845 
+delta1 <- -0.3230
+var_eta <- 0.3107 
+var_kap <- 0.3286 
+  
+ymat <- matrix(y, nrow=1)
+
+T = matrix(c(1, 0, 0,
+             0, phi1, phi2,
+             0, 1, 0), nrow = 3,3)
+R = matrix(c(1, 0,
+             0, 1,
+             0, 0), nrow = 3,2)
+Z = matrix(c(1, 1, 0), nrow = 1)
+Q = matrix(c(var_eta, 0,
+             0, var_kap), nrow = 2, 2)
+H = matrix(0, nrow = 1)
+
+# know delta t is d_0 + d_1 past 1972Q4 (3 x y matrix), so manually input these
+# see index of 1973Q1 is from 5 to 105
+deltat <- matrix(0, nrow = 3, length(y))
+deltat[1,1:100] <- delta0
+deltat[1,101:length(y)] <- delta0+delta1
+c = matrix(c(deltat,
+             0,
+             0), nrow = 3,1)
+a1 = matrix(mu1, nrow = 1,1)
+P1 = matrix(1e7, nrow = 1,1) # from lecture slides, to diffuse shock(?)
+
+model <- list(Z=Z, H=H, T=T, R=R, Q=Q, c=c, 
+              a1=c(y[1], 0, 0), P1=diag(c(1e7, 1e7, 1e7)))
+
+# now try the kalman filter to estimate teh model
+kf2 <- kalman_filter(ymat,model)
+
+```
+
